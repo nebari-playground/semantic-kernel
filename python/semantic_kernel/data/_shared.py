@@ -143,6 +143,29 @@ def create_options(
     return options
 
 
+def _sanitize_filter_value(value: Any) -> str:
+    """Sanitize a value for safe inclusion in a filter lambda string.
+
+    Uses repr() to produce a safely escaped Python literal representation,
+    preventing code injection through crafted string values.
+
+    Args:
+        value: The value to sanitize. Must be a simple Python literal type.
+
+    Returns:
+        A string containing the repr() of the value, safe for inclusion in a lambda expression.
+
+    Raises:
+        ValueError: If the value is not a supported simple type.
+
+    """
+    if not isinstance(value, (str, int, float, bool, type(None))):
+        raise ValueError(
+            f"Filter value must be a simple type (str, int, float, bool, None), got {type(value).__name__}"
+        )
+    return repr(value)
+
+
 def default_dynamic_filter_function(
     filter: OptionalOneOrList[Callable | str] | None = None,
     parameters: list["KernelParameterMetadata"] | None = None,
@@ -168,9 +191,11 @@ def default_dynamic_filter_function(
             continue
         new_filter = None
         if param.name in kwargs:
-            new_filter = f"lambda x: x.{param.name} == '{kwargs[param.name]}'"
+            safe_value = _sanitize_filter_value(kwargs[param.name])
+            new_filter = f"lambda x: x.{param.name} == {safe_value}"
         elif param.default_value:
-            new_filter = f"lambda x: x.{param.name} == '{param.default_value}'"
+            safe_value = _sanitize_filter_value(param.default_value)
+            new_filter = f"lambda x: x.{param.name} == {safe_value}"
         if not new_filter:
             continue
         if filter is None:
